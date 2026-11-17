@@ -1,0 +1,10 @@
+document.addEventListener('DOMContentLoaded',()=>{
+const form=document.getElementById('doc-form');if(!form)return;
+const backgroundControls=document.getElementById('doc-background-controls');const type=form.querySelector('#doc-type'),tpl=form.querySelector('#doc-template'),offer=form.querySelector('#doc-offer'),title=form.querySelector('#doc-title'),photo=document.getElementById('doc-photo-wrap'),layout=document.getElementById('doc-layout-wrap'),sections=document.getElementById('doc-section-controls'),variant=form.querySelector('[name="variant_id"]');
+let titleEdited=title.value.trim()!=='';
+title.addEventListener('input',()=>{titleEdited=title.value.trim()!=='';});
+function autoTitle(){if(titleEdited)return;const o=offer.selectedOptions[0];const job=o?.dataset.job||'Professionnel',company=o?.dataset.company||'';title.value=(type.value==='cv'?'CV':'Lettre de motivation')+' — '+job+(company?' — '+company:'');}
+function refresh(){const t=type.value;Array.from(tpl.options).forEach(o=>{o.hidden=o.dataset.type!==t;o.disabled=o.dataset.type!==t;});if(tpl.selectedOptions[0]?.disabled)tpl.value=t==='cv'?'classic':'letter_classic';photo.hidden=t!=='cv';if(backgroundControls)backgroundControls.hidden=t!=='cv';layout.hidden=t!=='cv';sections.hidden=t!=='cv';Array.from(variant.options).forEach(o=>{if(o.value!=='0'){o.hidden=o.dataset.base!==tpl.value;o.disabled=o.dataset.base!==tpl.value;}});if(variant.selectedOptions[0]?.disabled)variant.value='0';document.getElementById('variant-base').value=tpl.value;autoTitle();}
+type.addEventListener('change',()=>{titleEdited=false;refresh();});tpl.addEventListener('change',refresh);offer.addEventListener('change',()=>{titleEdited=false;autoTitle();});refresh();
+const variantForm=document.getElementById('doc-variant-form');variantForm?.addEventListener('submit',()=>{const hidden=document.getElementById('variant-style-hidden');hidden.innerHTML='';form.querySelectorAll('[name^="style["]').forEach(el=>{if(el.type==='checkbox'&&!el.checked)return;const clone=document.createElement('input');clone.type='hidden';clone.name=el.name;clone.value=el.value;hidden.appendChild(clone);});});
+});

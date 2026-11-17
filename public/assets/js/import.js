@@ -1,0 +1,31 @@
+(()=>{'use strict';const form=document.getElementById('import-form'),preview=document.getElementById('import-preview'),summary=document.getElementById('import-summary'),confirm=document.getElementById('import-confirm');if(!form)return;const labels={title:'Poste',company:'Entreprise',city:'Ville',discovery_platform:'Plateforme',salary_min:'Salaire minimum (€)',salary_max:'Salaire maximum (€)',source_url:'URL',space_id:'Espace de recherche',description:'Description'};const fields=Object.keys(labels);function reset(){confirm.value='0';preview.hidden=true;}form.addEventListener('input',reset);form.addEventListener('change',reset);document.getElementById('import-preview-button').addEventListener('click',()=>{if(!form.reportValidity())return;const min=form.elements.salary_min.value,max=form.elements.salary_max.value;if(min!==''&&max!==''&&Number(max)<Number(min)){form.elements.salary_max.setCustomValidity('Le maximum doit être supérieur ou égal au minimum.');form.reportValidity();form.elements.salary_max.setCustomValidity('');return;}summary.replaceChildren();for(const key of fields){const el=form.elements[key],dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=labels[key];dd.textContent=key==='space_id'?(el.selectedOptions[0]?.textContent||'—'):(el.value.trim()||'—');summary.append(dt,dd);}preview.hidden=false;confirm.value='1';preview.scrollIntoView({behavior:'smooth',block:'nearest'});});document.getElementById('import-edit-button').addEventListener('click',()=>{reset();form.elements.title.focus();});form.addEventListener('submit',e=>{if(confirm.value!=='1'){e.preventDefault();document.getElementById('import-preview-button').focus();}});})();
+// v0.14.1 — extraction heuristique locale : aucune transmission réseau.
+(()=>{'use strict';
+const raw=document.getElementById('import-raw-text'),btn=document.getElementById('import-extract-button'),clear=document.getElementById('import-clear-button'),message=document.getElementById('import-extraction-message'),form=document.getElementById('import-form');if(!raw||!btn||!form)return;
+const norm=s=>s.replace(/\r/g,'').replace(/\u00a0/g,' ').trim();
+const lineValue=(lines,keys)=>{for(const l of lines){const m=l.match(/^([^:：]{2,35})\s*[:：]\s*(.+)$/);if(m&&keys.some(k=>k.test(m[1].trim())))return m[2].trim();}return '';};
+const clean=s=>s.replace(/^[\s•*\-–]+/,'').replace(/[\s•*\-–]+$/,'').trim();
+function extract(text){const lines=norm(text).split('\n').map(clean).filter(Boolean),top=lines.slice(0,30);
+let title=lineValue(top,[/^(poste|intitul[eé]|job title|position|puesto|vacante|offre|offer|emploi)\b/i]);
+if(!title){const candidate=top.find(l=>l.length>=6&&l.length<=110&&!/^(description|missions|responsabilit[eé]s|profil|about|empresa|company|salaire|salary|location|localisation|lieu|ubicaci[oó]n|contrat|contract|type de contrat|we are|nous recherchons|buscamos)\b/i.test(l)&&!/^https?:\/\//i.test(l));title=candidate||'';}
+let company=lineValue(top,[/^(entreprise|soci[eé]t[eé]|employeur|company|employer|empresa|compa[nñ][ií]a)\b/i]);
+let city=lineValue(top,[/^(lieu|ville|localisation|localisation du poste|location|ubicaci[oó]n|ciudad|localidad|localizaci[oó]n)\b/i]);
+let contract=lineValue(top,[/^(contrat|type de contrat|contract|employment type|tipo de contrato|jornada)\b/i]);
+if(!contract){const match=text.match(/\b(CDI|CDD|int[eé]rim|alternance|stage|freelance|permanent contract|fixed.term contract|contrato indefinido|contrato temporal)\b/i);contract=match?match[0]:'';}
+const salaryLine=lines.find(l=>/\b(salaire|r[eé]mun[eé]ration|salary|salario|compensation)\b/i.test(l)&&/\d/.test(l))||'';
+let salaryMin='',salaryMax='';
+if(salaryLine){const annual=/\b(an|annuel|annuelle|year|yearly|annual|a[nñ]o|anual|\/an|\/year)\b/i.test(salaryLine),monthly=/\b(mois|month|mensuel|mensual|\/mois|\/month)\b/i.test(salaryLine),k=salaryLine.match(/(\d{2,3}(?:[.,]\d+)?)\s*k\b/gi);
+let values=[];if(k){values=k.map(v=>Math.round(parseFloat(v.replace(/\s*k/i,'').replace(',','.'))*1000));}else{const nums=[...salaryLine.matchAll(/(?:^|[^\d])(\d{1,3}(?:[ .]\d{3})+|\d{4,6})(?:[^\d]|$)/g)].map(m=>Number(m[1].replace(/[ .]/g,'')));values=nums.filter(v=>v>=1000&&v<=1000000);}
+if(values.length&&(annual||monthly||k)){if(monthly)values=values.map(v=>v*12);if(annual||monthly){salaryMin=String(Math.min(...values));if(values.length>1)salaryMax=String(Math.max(...values));}}}
+const skills=[];const known=['SQL','MySQL','PHP','JavaScript','Python','Java','React','Angular','Scrum','Kanban','Agile','AWS','Azure','Docker','Kubernetes','Excel','Power BI','SAP','Salesforce','WordPress','SEO','CRM','ITIL','DevOps','Linux','Git','HTML','CSS','TypeScript'];for(const skill of known){const re=new RegExp('(^|[^\p{L}\p{N}])'+skill.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?=$|[^\p{L}\p{N}])','iu');if(re.test(text))skills.push(skill);}
+const urlMatch=text.match(/https?:\/\/[^\s<>"']+/i);const sourceUrl=urlMatch?urlMatch[0].replace(/[),.;]+$/,''):'';
+return{title:title.slice(0,200),company:company.slice(0,190),city:city.slice(0,160),contract,salaryMin,salaryMax,skills,sourceUrl};}
+btn.addEventListener('click',()=>{const text=norm(raw.value);if(text.length<30){message.textContent='Collez une annonce d’au moins 30 caractères.';raw.focus();return;}const d=extract(text),el=form.elements;for(const [key,val] of Object.entries({title:d.title,company:d.company,city:d.city,salary_min:d.salaryMin,salary_max:d.salaryMax,source_url:d.sourceUrl})){if(val)el[key].value=val;}
+// Conserver intégralement le texte fourni ; aucune donnée source n’est supprimée.
+el.description.value=text;
+form.dispatchEvent(new Event('input',{bubbles:true}));
+const detected=['Poste : '+(d.title||'à compléter'),'Entreprise : '+(d.company||'à compléter'),'Localisation : '+(d.city||'à compléter'),'Contrat : '+(d.contract||'non détecté'),'Salaire annuel : '+(d.salaryMin||'non détecté')+(d.salaryMax?' – '+d.salaryMax:''),'Compétences repérées : '+(d.skills.join(', ')||'aucune')];
+message.textContent='Extraction locale terminée. Vérifiez les champs ci-dessous avant de confirmer.\n'+detected.join('\n');
+form.scrollIntoView({behavior:'smooth',block:'start'});});
+clear.addEventListener('click',()=>{raw.value='';message.textContent='';raw.focus();});
+})();

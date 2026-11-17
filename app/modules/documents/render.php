@@ -1,0 +1,32 @@
+<?php
+declare(strict_types=1);
+function doc_render_html(array $d,array $p,bool $print=false):string {
+ $key=(string)$d['template_key'];$style=docs_style_sanitize(array_merge(docs_default_style($key),docs_presentation((int)$d['id'])),$key);
+ $type=(string)$d['document_type'];$accent=$style['accent'];$font=$style['font'];$density=$style['density'];$layout=$style['layout'];
+ $exportMode=$style['export_mode']??'premium';if($exportMode==='ats'&&$type==='cv'){$layout='single';$key='classic';}
+ $background=($type==='cv'&&$exportMode==='premium')?docs_background((int)$d['id']):null;
+ $bgMode=$background?($style['background_mode']??'none'):'none';$bgOpacity=max(0,min(75,(int)($style['background_opacity']??15)))/100;
+ $name=trim((string)($p['first_name']??'').' '.(string)($p['last_name']??''));
+ $sections=['PROFIL'=>'show_summary','COMPÉTENCES'=>'show_skills','FORMATION'=>'show_education','LANGUES'=>'show_languages'];
+ $lines=explode("\n",str_replace("\r",'',(string)$d['body']));$parts=[];$current='intro';$parts[$current]='';
+ foreach($lines as $line){$line=trim($line);$upper=mb_strtoupper($line);if($type==='cv'&&array_key_exists($upper,$sections)){$current=$upper;$parts[$current]='<h2>'.htmlspecialchars($line,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8').'</h2>';continue;}
+  if($line===''){$parts[$current].='<div class="space"></div>';continue;}
+  $parts[$current].='<p>'.htmlspecialchars($line,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8').'</p>';
+ }
+ $main='';$side='';foreach($parts as $section=>$html){if(isset($sections[$section])&&!$style[$sections[$section]])continue;
+  if($layout==='sidebar'&&$type==='cv'&&in_array($section,['COMPÉTENCES','LANGUES'],true))$side.=$html;else $main.=$html;
+ }
+ $photo='';if($exportMode!=='ats'&&$type==='cv'&&(int)$d['include_photo']===1&&!empty($p['photo_path'])&&is_file(APP_ROOT.'/storage/profile-photos/'.basename($p['photo_path'])))$photo='<img class="portrait" src="photo.php" alt="Portrait">';
+ $heading=$type==='letter'?'':'<header class="cv-head">'.$photo.'<div class="cv-kicker">CURRICULUM VITAE</div><div class="cv-name">'.htmlspecialchars($name,ENT_QUOTES,'UTF-8').'</div><div class="cv-role">'.htmlspecialchars((string)($p['headline']??''),ENT_QUOTES,'UTF-8').'</div></header>';
+ $densityCSS=['compact'=>'1.28','normal'=>'1.48','airy'=>'1.7'][$density];$fontCSS=htmlspecialchars($font,ENT_QUOTES,'UTF-8');
+ $css=':root{--accent:'.$accent.'}*{box-sizing:border-box}body{margin:0;background:#e9eef2;color:#273645;font-family:"'.$fontCSS.'",Arial,sans-serif}.toolbar{background:#172e44;color:#fff;padding:13px 25px;display:flex;justify-content:space-between;align-items:center;gap:12px}.toolbar button{background:#078e89;color:#fff;border:0;border-radius:7px;padding:10px 15px;cursor:pointer}.sheet{width:210mm;min-height:297mm;margin:22px auto;padding:20mm 19mm;background:white;box-shadow:0 8px 30px #0002;overflow-wrap:anywhere}.sheet p{font-size:10.4pt;line-height:'.$densityCSS.';margin:5px 0;white-space:pre-wrap}.sheet h2{font-size:11pt;letter-spacing:.8px;color:var(--accent);border-bottom:1px solid #dce3e7;padding:5px 0 7px;margin:17px 0 10px;text-transform:uppercase}.space{height:9px}.cv-head{position:relative;min-height:75px;border-bottom:3px solid var(--accent);padding:0 0 16px;margin:0 0 18px}.cv-kicker{font-size:9px;letter-spacing:2px;color:var(--accent)}.cv-name{font-size:25pt;font-weight:800;line-height:1.1;margin:9px 0 4px}.cv-role{font-size:11pt;color:#61717d}.portrait{float:right;width:85px;height:105px;object-fit:cover;border-radius:8px;margin:0 0 10px 15px}.columns{display:grid;grid-template-columns:1fr;gap:17px}.sheet.sidebar .columns{grid-template-columns:minmax(0,1fr) 29%}.sheet.sidebar aside{background:#edf5f5;padding:14px;border-radius:8px}.sheet.creative{border-left:12px solid var(--accent)}.sheet.creative .cv-head{background:#172e44;color:#fff;margin:-20mm -19mm 20px;padding:18mm 19mm 12mm;border:0}.sheet.creative .cv-role{color:#d8e5e8}.sheet.swiss .cv-head{border-bottom:1px solid #202b34}.sheet.swiss h2{border-bottom:1px solid #202b34}.sheet.results .cv-head{border-top:8px solid var(--accent);padding-top:12px}.sheet.results h2{background:#f7f1ed;padding:9px;border:0}.sheet.modern .cv-head{border-bottom:5px solid var(--accent)}.sheet.letter_modern{border-top:9px solid var(--accent)}.sheet.letter_classic{border-top:1px solid #243648}.letter-title{font-size:16pt;color:var(--accent);margin-bottom:25px}.letter-sign{margin-top:35px}.sheet.letter_modern .letter-title{font-weight:800}.sheet .doc-main>p:first-child{font-weight:600}.sheet aside p{font-size:9.2pt}@media print{body{background:#fff}.toolbar{display:none}.sheet{box-shadow:none;margin:0;width:auto;min-height:0;padding:0!important}.sheet.creative .cv-head{margin:0 0 20px;padding:15px}@page{size:A4;margin:16mm}}';
+ $bgCss='';if($background&&in_array($bgMode,['full','header','sidebar'],true)){
+  $url='document-background.php?id='.(int)$d['id'];$region=['full'=>'inset:0','header'=>'top:0;left:0;right:0;height:54mm','sidebar'=>'top:0;left:0;bottom:0;width:36%'][$bgMode];
+  $bgCss='.sheet{position:relative;isolation:isolate}.sheet::before{content:"";position:absolute;'.$region.';background-image:url("'.$url.'");background-size:cover;background-position:center;opacity:'.$bgOpacity.';z-index:-1;pointer-events:none}.sheet>*{position:relative}';
+ }
+ if($exportMode==='ats'&&$type==='cv'){$bgCss.='.sheet{border:0!important}.sheet h2{background:none!important}.sheet .cv-head{background:none!important;color:#273645!important}.sheet .columns{display:block!important}.sheet aside{background:none!important;padding:0!important}';}
+ $css.=$bgCss;
+ $class=htmlspecialchars($key,ENT_QUOTES,'UTF-8').' '.($layout==='sidebar'&&$type==='cv'?'sidebar':'single');
+ $inner=$type==='letter'?'<div class="letter-title">'.htmlspecialchars($d['title'],ENT_QUOTES,'UTF-8').'</div><div class="doc-main">'.$main.'</div>':$heading.'<div class="columns"><div class="doc-main">'.$main.'</div>'.($side!==''?'<aside>'.$side.'</aside>':'').'</div>';
+ return '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'.htmlspecialchars($d['title'],ENT_QUOTES,'UTF-8').'</title><style>'.$css.'</style></head><body><div class="toolbar"><span>Aperçu : '.htmlspecialchars($d['title'],ENT_QUOTES,'UTF-8').'</span><button onclick="window.print()">Imprimer / Enregistrer en PDF</button></div><article class="sheet '.$class.'">'.$inner.'</article></body></html>';
+}
